@@ -54,7 +54,6 @@ def test_publication_procedure_enforces_last_good_and_validation():
     assert "BLOCKED_STALE_BATCH" in PIPELINE
     assert "MERGE INTO EDH_DEMO.GOVERNANCE.CURRENT_PUBLICATION" in PIPELINE
     assert "BEGIN TRANSACTION" in PIPELINE and "ROLLBACK" in PIPELINE
-    assert "UNIQUE" not in PIPELINE.upper().split("CREATE TASK")[0] or True
     assert "GRANT USAGE ON PROCEDURE" in PIPELINE
 
 
