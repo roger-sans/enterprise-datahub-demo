@@ -1,0 +1,40 @@
+name: Platform quality
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+
+jobs:
+  platform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Test contracts, Dagster and API
+        run: |
+          python -m pip install -e ".[dev]"
+          python -m pytest -q
+      - name: Test the workspace in Chromium
+        run: |
+          python -m playwright install --with-deps chromium
+          python scripts/browser_smoke.py
+  compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start the standalone environment
+        run: docker compose up --build --wait --wait-timeout 100
+      - name: Check seeded publications and OpenAPI
+        run: |
+          curl --fail --silent http://127.0.0.1:8000/api/overview | jq -e '.fresh_count == 3'
+          curl --fail --silent http://127.0.0.1:8000/openapi.json | jq -e '.info.title == "Enterprise Data Hub"'
+      - name: Inspect startup on failure
+        if: failure()
+        run: docker compose logs
+      - name: Stop services
+        if: always()
+        run: docker compose down -v

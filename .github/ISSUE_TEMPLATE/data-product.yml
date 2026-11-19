@@ -1,0 +1,27 @@
+name: Data product work item
+description: Record a story, enabler or spike with named consumers and acceptance.
+title: "[EDH-XX] "
+body:
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Work item type
+      options: [Story, Enabler, Spike, Incident]
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Consumer, accountable owner and business outcome
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria and supporting evidence
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies, delivery risk and priority score

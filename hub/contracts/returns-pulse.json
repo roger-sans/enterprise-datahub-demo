@@ -1,0 +1,43 @@
+{
+  "product_id": "returns-pulse",
+  "version": "1.0.0",
+  "classification": "Internal aggregate \u00b7 Synthetic",
+  "policy": "Only nullable additions can be released within the current major version.",
+  "primary_key": [
+    "period_start",
+    "channel",
+    "reason"
+  ],
+  "fields": [
+    {
+      "name": "period_start",
+      "type": "date",
+      "description": "Monday of return request week",
+      "required": true
+    },
+    {
+      "name": "channel",
+      "type": "string",
+      "description": "Purchase channel",
+      "required": true
+    },
+    {
+      "name": "reason",
+      "type": "string",
+      "description": "Approved reason grouping",
+      "required": true
+    },
+    {
+      "name": "return_count",
+      "type": "integer",
+      "description": "Unique opened returns",
+      "required": true
+    },
+    {
+      "name": "refund_cents",
+      "type": "integer",
+      "description": "Refund exposure in EUR cents",
+      "required": true
+    }
+  ]
+}

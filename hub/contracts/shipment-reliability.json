@@ -1,0 +1,49 @@
+{
+  "product_id": "shipment-reliability",
+  "version": "1.0.0",
+  "classification": "Internal aggregate \u00b7 Synthetic",
+  "policy": "Only nullable additions can be released within the current major version.",
+  "primary_key": [
+    "period_start",
+    "region",
+    "carrier"
+  ],
+  "fields": [
+    {
+      "name": "period_start",
+      "type": "date",
+      "description": "Monday of delivery week",
+      "required": true
+    },
+    {
+      "name": "region",
+      "type": "string",
+      "description": "Fulfilment region",
+      "required": true
+    },
+    {
+      "name": "carrier",
+      "type": "string",
+      "description": "Carrier label",
+      "required": true
+    },
+    {
+      "name": "shipment_count",
+      "type": "integer",
+      "description": "Delivered shipments",
+      "required": true
+    },
+    {
+      "name": "on_time_count",
+      "type": "integer",
+      "description": "Delivered on or before the promise date",
+      "required": true
+    },
+    {
+      "name": "on_time_pct",
+      "type": "decimal",
+      "description": "Percentage of delivered shipments on time",
+      "required": true
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+[
+  {
+    "id": "shipment-reliability", "name": "Shipment Reliability", "domain": "Operations",
+    "owner": "Fulfilment Data Owner", "owner_actor": "operations-owner", "steward": "Data Governance",
+    "consumers": ["Business Improvement", "Product Management"], "freshness_hours": 24,
+    "description": "Compare delivery promises with actual arrivals across regional carrier lanes.",
+    "grain": "One row per delivery week, region and carrier", "source": "Dispatch events",
+    "metric": "On-time delivery", "lineage_note": "The remediated dispatch feed is also used by Finance.",
+    "metric_definition": "Delivered shipments on or before the promised date divided by all delivered shipments. Pending shipments are outside the denominator.",
+    "purpose": "Prioritise carrier reviews using a common definition of a late shipment.",
+    "retention": "Keep accepted snapshots for the demo session. Target: 90 days of raw data and 13 months of aggregates."
+  },
+  {
+    "id": "freight-spend", "name": "Freight Spend", "domain": "Finance",
+    "owner": "Finance Data Owner", "owner_actor": "finance-owner", "steward": "Data Governance",
+    "consumers": ["Finance Planning", "Operations"], "freshness_hours": 48,
+    "description": "Reconcile booked freight costs by accounting month, region and carrier.",
+    "grain": "One row per dispatch month, region and carrier", "source": "Dispatch events",
+    "metric": "Freight spend", "lineage_note": "Shares Dispatch events and the standard Silver model with Shipment Reliability.",
+    "metric_definition": "Sum of freight cost in integer EUR cents, grouped by dispatch month. Taxes and return transport are outside this dataset.",
+    "purpose": "Compare lane costs and explain movements in the monthly cost review.",
+    "retention": "Keep accepted snapshots for the demo session. Target: 90 days of raw data and 25 months of aggregates."
+  },
+  {
+    "id": "returns-pulse", "name": "Returns Pulse", "domain": "Customer Experience",
+    "owner": "Customer Experience Data Owner", "owner_actor": "experience-owner", "steward": "Data Governance",
+    "consumers": ["Marketing", "Product Management"], "freshness_hours": 24,
+    "description": "Spot changes in return volume and refund exposure by channel and reason.",
+    "grain": "One row per return week, channel and reason", "source": "Return events",
+    "metric": "Return requests", "lineage_note": "Only aggregated reasons and channels reach consumers.",
+    "metric_definition": "Count of unique return requests opened in the week. It is a volume measure without a sales denominator.",
+    "purpose": "Help product teams choose which preventable return reasons to investigate.",
+    "retention": "Keep accepted snapshots for the demo session. Target: 30 days of raw data and 13 months of aggregates."
+  }
+]
