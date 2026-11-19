@@ -10,7 +10,6 @@ from fastapi.testclient import TestClient
 from hub.api import create_app
 from hub.catalog import BASE_CONTRACTS, PRODUCTS, compatibility
 from hub.refresh import SCHEDULES, launch
-from hub.snowflake import export
 from hub.store import Store
 from hub.synthetic import source_rows
 
@@ -207,23 +206,32 @@ def test_source_fixtures_and_schedule_are_available():
     assert len(SCHEDULES) == 3
 
 
-def test_cloud_export_has_provenance_and_tampering_is_detected(store, tmp_path):
-    accepted = launch(store, RETURNS)
-    load = export(store, RETURNS, tmp_path / "export")
+def test_snowflake_staging_exports_raw_events_and_provenance(tmp_path):
+    from hub.snowflake import export_source
+
+    load = export_source(RETURNS, tmp_path / "snowflake", "healthy")
     manifest = json.loads(load.with_name("manifest.json").read_text())
-    artifact = load.with_name(manifest["file"])
-    assert sha256(artifact.read_bytes()).hexdigest() == manifest["parquet_sha256"]
-    assert manifest["local_run"] == accepted["id"]
-    assert manifest["rows"] == accepted["metadata"]["row_count"]
-    assert set(manifest["totals"]) == {"return_count", "refund_cents"}
-    sql = load.read_text()
-    assert "GROUP BY PERIOD_START, CHANNEL, REASON" in sql
-    assert "COUNT_IF(PERIOD_START IS NULL" in sql
-    assert "BEGIN TRANSACTION" in sql and "MERGE INTO" in sql
-    path = store.artifact(accepted["id"], "serving")
-    path.write_bytes(path.read_bytes() + b"tampered")
-    with pytest.raises(ValueError, match="digest"):
-        export(store, RETURNS, tmp_path / "second")
+    raw = load.with_name(manifest["source_file"])
+    assert sha256(raw.read_bytes()).hexdigest() == manifest["sha256"]
+    assert manifest["product_id"] == RETURNS
+    assert manifest["source_id"] == "Return events"
+    assert manifest["rows"] == len(source_rows("Return events", "healthy"))
+    assert manifest["snowflake_execution"] == "not_executed"
+    first = json.loads(raw.read_text().splitlines()[0])
+    assert first["source_id"] == "Return events"
+    assert first["payload"]["source_row"] == 1
+    script = load.read_text()
+    assert "COPY INTO EDH_DEMO.RAW.EVENTS" in script
+    assert "EDH_DEMO.GOVERNANCE.PUBLISH_PRODUCT" in script
+    assert "EDH_DEMO.RAW.SYNTHETIC_EVENTS" in script
+    assert "CURATED.CURRENT_PUBLICATION" not in script
+
+    rejected = export_source(COST, tmp_path / "rejected", "negative-money")
+    bad_manifest = json.loads(rejected.with_name("manifest.json").read_text())
+    assert bad_manifest["scenario"] == "negative-money"
+    assert any(json.loads(line)["payload"]["freight_cents"] < 0
+               for line in rejected.with_name(bad_manifest["source_file"]).read_text().splitlines())
+
 
 
 def test_compatibility_rejects_new_required_fields_and_reordered_columns():
