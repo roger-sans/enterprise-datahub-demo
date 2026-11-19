@@ -66,7 +66,7 @@ class Store:
                 );
                 CREATE TABLE IF NOT EXISTS runs (
                     id INTEGER PRIMARY KEY AUTOINCREMENT, product_id TEXT, version TEXT,
-                    scenario TEXT, actor TEXT, dagster_id TEXT, status TEXT,
+                    scenario TEXT, actor TEXT, execution_id TEXT, status TEXT,
                     started_at TEXT, finished_at TEXT, metadata TEXT DEFAULT '{}'
                 );
                 CREATE TABLE IF NOT EXISTS events (
@@ -82,6 +82,11 @@ class Store:
                     acknowledged_by TEXT, resolved_at TEXT
                 );
             """)
+        # Retain existing local publications when upgrading from the legacy demo.
+        with self.connection(write=True) as db:
+            fields = {r['name'] for r in db.execute('PRAGMA table_info(runs)')}
+            if 'dagster_id' in fields and 'execution_id' not in fields:
+                db.execute('ALTER TABLE runs RENAME COLUMN dagster_id TO execution_id')
         with self.connection(write=True) as db:
             for product_id, contract in BASE_CONTRACTS.items():
                 db.execute("INSERT OR IGNORE INTO contracts VALUES (?, ?, ?)",
@@ -105,14 +110,14 @@ class Store:
                              (product_id, version)).fetchone()
         return json.loads(row["body"]) if row else None
 
-    def start(self, product_id: str, scenario: str, actor: str, dagster_id: str):
+    def start(self, product_id: str, scenario: str, actor: str, execution_id: str):
         require_role(actor, "operator")
         with self.connection(write=True) as db:
             contract = self.active(product_id, db)
             run_id = db.execute("""
-                INSERT INTO runs(product_id, version, scenario, actor, dagster_id, status, started_at)
+                INSERT INTO runs(product_id, version, scenario, actor, execution_id, status, started_at)
                 VALUES (?, ?, ?, ?, ?, 'running', ?)
-            """, (product_id, contract["version"], scenario, actor, dagster_id, now())).lastrowid
+            """, (product_id, contract["version"], scenario, actor, execution_id, now())).lastrowid
         return run_id, contract
 
     def events(self, run_id: int):
@@ -193,9 +198,9 @@ class Store:
             row = db.execute("SELECT * FROM runs WHERE id = ?", (run_id,)).fetchone()
         return self.decode(row, "metadata") if row else None
 
-    def run_for_dagster(self, dagster_id: str):
+    def run_for_execution(self, execution_id: str):
         with self.connection() as db:
-            row = db.execute("SELECT * FROM runs WHERE dagster_id = ?", (dagster_id,)).fetchone()
+            row = db.execute("SELECT * FROM runs WHERE execution_id = ?", (execution_id,)).fetchone()
         return self.decode(row, "metadata") if row else None
 
     def runs(self, limit: int = 60):
