@@ -89,6 +89,18 @@ snow sql --connection edh-sandbox -f snowflake/02_verify.sql
 
 Tasks are created suspended, and must only be resumed after credential isolation, negative-access probes, cost controls, rollback and stakeholder approval. The [migration and acceptance guide](docs/snowflake.md) explains how to cut over from the earlier Dagster-centric demonstration and what still requires a real Snowflake validation. **Cloud execution has not been verified in this portfolio.**
 
+## Optional direct Snowflake secure-view API
+
+For an approved sandbox reader account, install the optional connector and configure a named profile in your local Snowflake `connections.toml` (never in Git):
+
+~~~bash
+python -m pip install -e ".[snowflake]"
+# Set HUB_SNOWFLAKE_CONNECTION to a reader-scoped named profile.
+# Example on Windows: $env:HUB_SNOWFLAKE_CONNECTION="edh-finance-reader"
+~~~
+
+The **GET /api/snowflake/{product_id}/data** endpoint queries only the selected, allowlisted `SERVING.*_V1` secure view with parameterised filters. It returns 503 when not configured, rather than silently substituting offline data. The default dashboard uses its local demo dataset; cloud reads are explicit, separate and not validated without a Snowflake account. See [consumer verification](docs/walkthrough.md).
+
 ## Product Ownership and governance
 
 The case demonstrates a Product Owner who treats data as an internal product: cross-functional discovery, value/risk prioritisation, federated responsibility, consumer contracts, data quality, incident recovery and Snowflake platform adoption.
