@@ -84,7 +84,7 @@ def create_app(root=None):
         Store(root).init()
         yield
 
-    app = FastAPI(title="Enterprise Data Hub", version="1.0.0", lifespan=lifespan,
+    app = FastAPI(title="Enterprise Data Hub", version="2.0.0", lifespan=lifespan,
                   description="Synthetic data products, local publications and simulated governance approvals.")
     app.mount("/static", StaticFiles(directory=PACKAGE / "static"), name="static")
 
@@ -178,6 +178,19 @@ def create_app(root=None):
         return Response(output.getvalue(), media_type="text/csv",
                         headers={"Content-Disposition": f'attachment; filename="{product_id}-v{snapshot["version"]}.csv"',
                                  "X-Publication-Id": str(snapshot["id"])})
+
+    @app.get("/api/snowflake/{product_id}/data", tags=["Snowflake"])
+    def snowflake_preview(product_id: str, limit: int = Query(30, ge=1, le=250),
+                          dimension: str | None = Query(None, max_length=60), period: date | None = None):
+        """Opt-in cloud consumer. Fails closed rather than returning local demo rows."""
+        require_product(product_id)
+        from .snowflake_reader import CloudNotConfigured, read_secure_view
+        try:
+            return read_secure_view(product_id, limit, dimension, period)
+        except CloudNotConfigured as exc:
+            raise HTTPException(503, str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
 
     @app.get("/api/runs", tags=["Operations"])
     def runs():
