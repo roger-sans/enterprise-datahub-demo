@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 
 from .catalog import PRODUCTS
-from .orchestration import SCENARIOS, launch
+from .refresh import SCENARIOS, launch
 from .store import Store
 
 
@@ -12,7 +12,7 @@ def main():
     commands = parser.add_subparsers(dest="command", required=True)
     seed = commands.add_parser("seed", help="Build each missing sample publication.")
     seed.add_argument("--with-incident", action="store_true", help="Also run the freight quality incident once.")
-    run = commands.add_parser("run", help="Materialise one product with Dagster.")
+    run = commands.add_parser("run", help="Refresh one product with the offline Snowflake-compatible pipeline.")
     run.add_argument("product", choices=PRODUCTS)
     run.add_argument("--scenario", choices=SCENARIOS, default="healthy")
     delivery = commands.add_parser("snowflake-export", help="Package a publication for a Snowflake sandbox.")
