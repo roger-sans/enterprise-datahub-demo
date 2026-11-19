@@ -20,7 +20,6 @@ ROOT = Path(__file__).resolve().parents[1]
 def demo_server():
     with TemporaryDirectory(prefix="enterprise-data-hub-") as state:
         env = {**os.environ, "HUB_STATE": state}
-        env.pop("DAGSTER_HOME", None)
         subprocess.run([sys.executable, "-m", "hub", "seed", "--with-incident"],
                        cwd=ROOT, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
         with socket.socket() as sock:
