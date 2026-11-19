@@ -71,3 +71,55 @@ def test_no_assumed_cloud_proof_in_documentation():
         text = (ROOT / path).read_text(encoding="utf-8").lower()
         assert "cloud execution" in text
         assert "sandbox" in text
+
+
+def test_cloud_consumer_fails_closed_without_credentials(monkeypatch, tmp_path):
+    from fastapi.testclient import TestClient
+    from hub.api import create_app
+    monkeypatch.delenv("HUB_SNOWFLAKE_CONNECTION", raising=False)
+    with TestClient(create_app(tmp_path)) as client:
+        response = client.get("/api/snowflake/freight-spend/data")
+        assert response.status_code == 503
+        assert "HUB_SNOWFLAKE_CONNECTION" in response.json()["detail"]
+
+
+def test_cloud_reader_uses_only_allowlisted_secure_view_and_bound_parameters(monkeypatch):
+    import sys
+    import types
+    from hub.catalog import BASE_CONTRACTS
+    from hub.snowflake_reader import read_secure_view
+
+    calls = []
+    class Cursor:
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            return False
+        def execute(self, sql, params=None):
+            calls.append((sql, params))
+        @property
+        def description(self):
+            return [(field["name"].upper(),) for field in BASE_CONTRACTS["freight-spend"]["fields"]]
+        def fetchall(self):
+            return []
+    class Connection:
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            return False
+        def cursor(self):
+            return Cursor()
+    connector = types.ModuleType("snowflake.connector")
+    connector.connect = lambda **kwargs: Connection()
+    snowflake = types.ModuleType("snowflake")
+    snowflake.connector = connector
+    monkeypatch.setitem(sys.modules, "snowflake", snowflake)
+    monkeypatch.setitem(sys.modules, "snowflake.connector", connector)
+    monkeypatch.setenv("HUB_SNOWFLAKE_CONNECTION", "synthetic-reader")
+
+    result = read_secure_view("freight-spend", 10, "WEST")
+    assert result["source"].startswith("Snowflake")
+    assert calls[0][0] == "USE SECONDARY ROLES NONE"
+    assert "EDH_DEMO.SERVING.FREIGHT_SPEND_V1" in calls[1][0]
+    assert calls[1][1] == ["WEST", 10]
+    assert "WEST" not in calls[1][0]  # parameterised, never interpolated
