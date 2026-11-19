@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from hub.api import create_app
 from hub.catalog import BASE_CONTRACTS, PRODUCTS, compatibility
-from hub.orchestration import defs, launch
+from hub.refresh import SCHEDULES, launch
 from hub.snowflake import export
 from hub.store import Store
 from hub.synthetic import source_rows
@@ -204,7 +204,7 @@ def test_source_fixtures_and_schedule_are_available():
         anomaly = source_rows(source, "negative-money")
         assert healthy[:-1] == anomaly[:-1]
         assert healthy[-1] != anomaly[-1]
-    assert len(defs.get_repository_def().schedule_defs) == 3
+    assert len(SCHEDULES) == 3
 
 
 def test_cloud_export_has_provenance_and_tampering_is_detected(store, tmp_path):
@@ -251,7 +251,7 @@ def test_gold_contract_blocks_a_bad_projection(client, store, monkeypatch):
     assert store.current(COST)["id"] == previous["id"]
 
 
-def test_concurrent_dagster_runs_have_isolated_batch_context(store):
+def test_concurrent_local_runs_have_isolated_batch_context(store):
     from concurrent.futures import ThreadPoolExecutor
 
     with ThreadPoolExecutor(max_workers=2) as runner:
