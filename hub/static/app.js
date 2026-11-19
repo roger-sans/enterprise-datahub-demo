@@ -145,7 +145,7 @@ function renderOverview(data) {
     ${panel('Data product status', 'Freshness of the current accepted snapshots', productList(data.products) +
       `<div class="list-row">${link(productLink(activeProduct.id) + '/lineage', 'Explore publication lineage')}${icon('arrow')}</div>`,
       link('#catalog', 'View catalogue'))}</div>
-    ${panel('Recent pipeline runs', 'Dagster execution outcomes', runTable(data.runs), link('#operations', 'View run history'), 'after-grid')}`;
+    ${panel('Recent pipeline runs', 'Snowflake-first refresh outcomes', runTable(data.runs), link('#operations', 'View run history'), 'after-grid')}`;
   const canvas = document.querySelector('#overview-chart');
   if (canvas) {
     chart = () => lineChart(canvas, data.trend.slice(-ctx.chartRange), { percent: true });
@@ -322,7 +322,7 @@ function renderOperations(runs, alerts) {
     a.target_hours + 'h', badge(a.status),
   ]), 'Every product has an accepted snapshot within its freshness target.');
   main.innerHTML = heading('Operations', 'Inspect pipeline evidence, manage alerts and replay the synthetic feeds.') + `<div class="section-stack">
-    ${panel('Refresh a data product', 'Dagster runs Bronze, Silver, Gold and Serving with blocking quality checks.', refreshForm)}
+    ${panel('Refresh a data product', 'Snowflake-native architecture with Bronze, Silver, Gold and governed Serving. The local demo reproduces quality gates.', refreshForm)}
     ${panel('Quality alerts', 'Failures leave the last accepted snapshot available. A later successful refresh resolves them.', quality)}
     ${panel('Freshness watch', 'Measured from the latest accepted publication.', freshness)}
     ${panel('Run history', 'Recent quality gates and publication outcomes.', runTable(runs))}
@@ -335,11 +335,11 @@ function renderRun(run) {
     blocked: 'The run was blocked. Serving retains the last accepted publication.',
     published: 'The snapshot became current after both quality gates passed.',
     superseded: 'The run completed after a newer run or approved contract took precedence.',
-    running: 'Dagster is processing this batch.',
+    running: 'The local refresh is processing this batch.',
   }[run.status];
   main.innerHTML = heading('Run #' + run.id, displayName(run.product_id) + ' · ' + timestamp(run.started_at),
     link('#operations', 'Back to operations', 'button')) + `<div class="notice ${run.status === 'blocked' ? 'warning' : ''}">${statusText}</div>` +
-    panel('Execution evidence', 'Dagster run ' + run.dagster_id, checksView(run.events), badge(run.status));
+    panel('Execution evidence', 'Execution ' + run.execution_id, checksView(run.events), badge(run.status));
 }
 
 function renderGovernance(p, requests) {
