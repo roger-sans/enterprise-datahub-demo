@@ -1,22 +1,40 @@
--- Run one section at a time using an identity assigned the corresponding reader role.
--- Compare each result with the generated manifest.json for that product.
+-- Snowflake 2.0 verification. Run only in the approved synthetic sandbox.
+-- Each USE ROLE requires that the testing identity has actually been granted it.
+-- Repeat with dedicated reader-only users for meaningful negative-access tests.
 USE SECONDARY ROLES NONE;
 USE WAREHOUSE EDH_DEMO_WH;
+USE ROLE SYSADMIN;
 
+-- Native source, deduplication, gold reconciliation and current publication.
+SELECT SOURCE_ID, BATCH_ID, COUNT(*) AS RAW_ROWS, COUNT(DISTINCT PAYLOAD:ref::VARCHAR) AS UNIQUE_REFS
+FROM EDH_DEMO.RAW.EVENTS GROUP BY 1,2 ORDER BY 1,2;
+SELECT BATCH_ID, COUNT(*) AS SILVER_ROWS, SUM(FREIGHT_CENTS) AS FREIGHT_CENTS
+FROM EDH_DEMO.SILVER.DISPATCH_EVENTS GROUP BY 1 ORDER BY 1;
+SELECT BATCH_ID, COUNT(*) AS SILVER_ROWS, SUM(REFUND_CENTS) AS REFUND_CENTS
+FROM EDH_DEMO.SILVER.RETURN_EVENTS GROUP BY 1 ORDER BY 1;
+SELECT * FROM EDH_DEMO.GOVERNANCE.CURRENT_PUBLICATION ORDER BY PRODUCT_ID;
+SELECT * FROM EDH_DEMO.GOVERNANCE.PUBLICATION_AUDIT ORDER BY RECORDED_AT DESC;
+SHOW TASKS IN SCHEMA EDH_DEMO.GOVERNANCE;
+
+-- Reader probes: run each block as its own reader, secondary roles disabled.
 USE ROLE EDH_OPERATIONS_READER;
-SELECT COUNT(*) AS rows, SUM(shipment_count) AS shipments, SUM(on_time_count) AS on_time
+USE SECONDARY ROLES NONE;
+SELECT COUNT(*) AS ROWS, SUM(SHIPMENT_COUNT) AS SHIPMENTS, SUM(ON_TIME_COUNT) AS ON_TIME
 FROM EDH_DEMO.SERVING.SHIPMENT_RELIABILITY_V1;
 
 USE ROLE EDH_FINANCE_READER;
-SELECT COUNT(*) AS rows, SUM(shipment_count) AS shipments, SUM(freight_cents) AS freight_cents
+USE SECONDARY ROLES NONE;
+SELECT COUNT(*) AS ROWS, SUM(SHIPMENT_COUNT) AS SHIPMENTS, SUM(FREIGHT_CENTS) AS FREIGHT_CENTS
 FROM EDH_DEMO.SERVING.FREIGHT_SPEND_V1;
 
 USE ROLE EDH_EXPERIENCE_READER;
-SELECT COUNT(*) AS rows, SUM(return_count) AS returns, SUM(refund_cents) AS refund_cents
+USE SECONDARY ROLES NONE;
+SELECT COUNT(*) AS ROWS, SUM(RETURN_COUNT) AS RETURNS, SUM(REFUND_CENTS) AS REFUND_CENTS
 FROM EDH_DEMO.SERVING.RETURNS_PULSE_V1;
 
--- Run each deliberately denied query individually as a Finance reader.
+-- Intentionally forbidden queries. Run one at a time under reader-only identities.
 -- USE ROLE EDH_FINANCE_READER;
+-- SELECT * FROM EDH_DEMO.RAW.EVENTS;
 -- SELECT * FROM EDH_DEMO.CURATED.FREIGHT_SPEND;
 -- SELECT * FROM EDH_DEMO.SERVING.SHIPMENT_RELIABILITY_V1;
--- LIST @EDH_DEMO.LANDING.SYNTHETIC_UPLOAD;
+-- LIST @EDH_DEMO.RAW.SYNTHETIC_EVENTS;
