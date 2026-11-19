@@ -15,9 +15,10 @@ def main():
     run = commands.add_parser("run", help="Refresh one product with the offline Snowflake-compatible pipeline.")
     run.add_argument("product", choices=PRODUCTS)
     run.add_argument("--scenario", choices=SCENARIOS, default="healthy")
-    delivery = commands.add_parser("snowflake-export", help="Package a publication for a Snowflake sandbox.")
+    delivery = commands.add_parser("snowflake-stage", help="Stage synthetic raw events for the native Snowflake pipeline.")
     delivery.add_argument("product", choices=PRODUCTS)
     delivery.add_argument("directory", type=Path)
+    delivery.add_argument("--scenario", choices=SCENARIOS, default="healthy")
     args = parser.parse_args()
     store = Store()
     store.init()
@@ -36,8 +37,8 @@ def main():
         if result["status"] != "published":
             raise SystemExit(1)
     else:
-        from .snowflake import export
-        print(export(store, args.product, args.directory))
+        from .snowflake import export_source
+        print(export_source(args.product, args.directory, args.scenario))
 
 
 if __name__ == "__main__":
