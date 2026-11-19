@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from .catalog import ACTORS, PACKAGE, PRODUCTS
 from .lakehouse import read_publication, trend
-from .orchestration import launch
+from .refresh import launch
 from .store import Conflict, Forbidden, Store, require_role
 
 
