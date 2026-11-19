@@ -52,6 +52,10 @@ Use separate role-scoped reader identities when running verification sections:
 snow sql --connection edh-sandbox -f snowflake/02_verify.sql
 ```
 
+## Optional API consumption using Snowflake Connector
+
+The sandbox's product-scoped secure view can also be queried from FastAPI without changing the offline demo. Install `python -m pip install -e ".[snowflake]"` and set `HUB_SNOWFLAKE_CONNECTION` to the name of a reader-scoped profile in your local Snowflake Connector `connections.toml`. Credentials must never appear in this repository. The explicit endpoint `GET /api/snowflake/{product_id}/data` uses allowlisted view names and bound `dimension`, `period` and `limit` parameters. If the profile or connector is missing it returns a configuration error (503), not made-up cloud records. With a Finance role, an Operations view must be denied by Snowflake. This behavior has a local mock test but awaits a live account-side role test.
+
 ## Actual migration and cutover gates
 
 1. **Inventory and freeze:** capture previous local accepted snapshot IDs, consumer contracts, source digests, data-quality outcomes and existing sandbox grants. Do not destroy the former state.
