@@ -1,31 +1,51 @@
-# Architecture, decisions and operational boundaries
+# Architecture and Product Ownership decisions
 
-## Physical and business contracts
+## Data platform product boundary
 
-| Layer | Durable output | Rule |
+Enterprise Data Hub is a governed internal data product platform. Domain owners decide **meaning, grain, permitted use and freshness**; the platform provides a common SQL data plane, contracts, quality gates, publication, audit and consumer access. This separation is a federated governance pattern, not a claim of a production Data Mesh rollout.
+
+## Snowflake-native target
+
+| Layer | Native implementation | Contract / guarantee |
 | --- | --- | --- |
-| Bronze | A run-specific JSONL object with SHA-256, row count and bytes | Preserve source attribute values and stable input ordinals. Writes use a new run directory. |
-| Silver | Typed Parquet deduplicated by synthetic event reference | Take the latest revision per event, retaining nullable dispatch completion. Validate allowed domains, non-negative amounts and reference counts. |
-| Gold | Typed Parquet at the product’s agreed grain | Define keys and aggregation in SQL. Check schema, types, nulls, unique grain, measure ranges and count-and-amount reconciliation with Silver. |
-| Serving | Immutable Parquet snapshot plus a transactional current pointer | Copy Gold only after both gates pass. Persist source and output digests, contract version, checks and counts with the pointer. |
-| Consumption | Versioned contract JSON, current preview and CSV | Expose authorised aggregates through the interface. Preview and download identify the immutable publication via response metadata. |
+| RAW | Internal JSON stage, `RAW.EVENTS` with `VARIANT`, source and batch identifiers | Source records retained, no downstream guessing by description |
+| SILVER | Typed views with per-batch last-revision deduplication | Stable reference, dates, cleaned controlled dimensions, money in integer cents |
+| GOLD | Business-grain SQL aggregation views | Weekly delivery performance, monthly posted freight, weekly returns |
+| Quality | `GOVERNANCE.PUBLISH_PRODUCT` checks source domains and Gold reconciliation | No invalid monetary amount or inconsistent aggregate becomes current |
+| CURATED | Typed product tables with immutable accepted publication keys | Accepted batches are preserved; previous reader views remain stable |
+| Governance | Publication pointer, append-oriented outcome audit and stored procedures | Only a passed publication moves the current pointer |
+| SERVING | Product-scoped **secure views** and separate reader roles | No direct RAW/CURATED access for a domain reader |
+| Execution | Three staggered Snowflake **Tasks**, suspended by default | Opt-in schedules after cost/security and release approval |
+| Consumption | Versioned output contracts, controlled SQL read access | Consumers receive a consistent agreed grain and published version |
 
-No extra persisted canonical table is necessary for these two feeds. Dispatch standardisation gives both owners the same revision logic. Independent Dagster replays for Operations and Finance write separate paths and agree on the same input digest. A dedicated shared physical Silver publication only becomes worthwhile if independent producers or refresh windows require it.
+Deployment scripts are [01_bootstrap.sql](../snowflake/01_bootstrap.sql) and [03_native_pipeline.sql](../snowflake/03_native_pipeline.sql). [02_verify.sql](../snowflake/02_verify.sql) contains audit, parity and role probes.
 
-## Decision records
+## Offline execution adapter
 
-| Decision | Context and trade-off | Validation |
+The web workspace remains runnable without a Snowflake subscription. `hub.refresh` calls the original semantic models through DuckDB and records immutable local Bronze JSONL, Silver/Gold Parquet, contract evidence and a SQLite publication pointer.
+
+This is explicitly a **simulation of the acceptance workflow**, not an implicit Snowflake connection. `hub.snowflake.export_source` packages actual RAW event fixtures for Snowflake to transform; it does not transfer a precomputed Serving result. Cloud production access and warehouse costs are outside local tests.
+
+## Architecture decisions
+
+| ADR | Choice | Rationale and limits |
 | --- | --- | --- |
-| ADR-01 · Parquet objects and a small transactional registry | Parquet and SQL let a reviewer reproduce a layered workload with a single Python service. Local directories model objects, while DuckDB reads the files in-process. SQLite keeps approvals and the current pointer in one transaction without another service. | Inspect run objects and query the API. Object-store retries, IAM, retention automation, Iceberg cataloguing and concurrent multi-host access are future engineering decisions. |
-| ADR-02 · Commit only after two blocking checks | A revision pass at source and a second contract gate protect different boundaries. Validated content is written before advancing the publication pointer. A failed run preserves the previous pointer, even when a publication is stale. | Inject a bad amount, compare exported bytes, replay and confirm recovery. The transaction also rejects completion from a superseded run or changed approved contract. |
-| ADR-03 · Separate contract approval and materialisation | Producers and reviewers can agree on future shape while current reads remain stable. Additive changes append nullable fields so the original CSV prefix survives. | Approve v1.1.0, confirm v1.0.0 is still current, then refresh and inspect the new column. A breaking proposal stays in the audit trail. |
-| ADR-04 · Snowflake as an optional managed Serving path | One verified reference implementation constrains migration scope. Governed Parquet export moves the data boundary without introducing a second local engine. Separate roles, secure views and an auto-suspending warehouse get reviewed in the sandbox. | Run the parity, denial, replay and cost checklist. See [Snowflake](snowflake.md). |
+| ADR-01 | Snowflake is the target data authority | Put native RAW, standardisation, product aggregation and scoped serving in one managed SQL environment. A local adapter exists only for portability. |
+| ADR-02 | Two quality gates precede a current-pointer change | Source correctness and consumer-grain reconciliation are different responsibilities. Rejected batches retain the prior accepted product. |
+| ADR-03 | Source observations and master contracts have different authorities | Products own business meaning. Operational/financial facts are observed and reconciled, not edited as catalogue attributes. |
+| ADR-04 | SQL procedures and Snowflake Tasks replace the earlier orchestrator | Less independent infrastructure for this scoped Snowflake workload. Tasks are disabled until cost, credentials and recovery are approved. |
+| ADR-05 | Independent contract approval | A breaking field removal is rejected; a compatible nullable addition requires steward approval, a new version and healthy publication. |
+| ADR-06 | Secure views and least-privilege readers | Finance can read Freight Spend but not Operations/Experience or the underlying raw source in an isolated reader role. |
 
-## Operating model
+## Operational controls
 
-- **Dagster.** A single reusable asset graph supports the three product inputs using run config. Start from the browser or CLI, or enable the independent daily schedules at 06:00, 06:20 and 06:40 UTC. Run tags/IDs and events tie a materialisation back to its snapshot. The freshness clock starts at accepted publication, while the observation dates are fixed synthetic fixture dates.
-- **Alert and recovery.** A blocked run records a quality or execution alert with the product and gate. The operator checks run evidence, acknowledges the alert and replays a corrected input. A later accepted refresh resolves earlier alerts. Missing and stale snapshots show separately in the freshness watch.
-- **Crash handling.** A process killed during work can leave an unreferenced directory and a running journal entry. The previous committed pointer survives. For the demo, rerun the product and retain the evidence. A lease-based reconciler and an end-to-end restore test are part of the next release.
-- **Retention and privacy.** The demo keeps its local snapshots for inspection. Each product documents its proposed retention. Never use real data. Future policy separates producer access to source storage, governed aggregate reads and platform custody of the registry.
-- **Deployment boundary.** The API listens on loopback by default. Roles are selected by the user and serve to exercise workflow constraints. A shared deployment needs authentication, actual identity mapping, audited access, backup and external alert routing.
-- **Target platform.** PostgreSQL is the next option for independently deployed metadata and Dagster state if multiple workers are admitted. Managed object storage or Iceberg can be considered when retention, concurrent writers and external table interoperability justify the operational cost.
+- **Failure:** Snowflake publication returns `BLOCKED_*` and writes an outcome record without moving the accepted pointer. The local demonstration records an equivalent alert and can acknowledge/recover it.
+- **Replay:** each generated JSONL is assigned a unique source batch. Stored procedures identify the latest staged batch and prevent manual publication of a stale batch. The published pointer is idempotent for an already current batch.
+- **Scheduling:** three separate Snowflake Tasks are initially suspended. A producer must stage new raw batches; these Tasks do not perform automatic source ingestion.
+- **Schema evolution:** the remote V1 contract remains stable; the local v1.1 annotation demonstrates approval but is not a claim that v1.1 is available in the remote sandbox.
+- **Concurrency:** the current SQL path assumes serialized publication per product. The explicit cutover checklist requires a concurrency exercise; standalone accounts should not run competing publishers unchecked.
+- **Lineage:** each raw batch has an export manifest and hash; Snowflake records source file/row, batch, Silver grain and accepted CURATED publication key.
+- **Cost:** an XSMALL auto-suspending demonstration warehouse is defined, but actual metering and role setup must be approved in a Snowflake account before tasks are enabled.
+- **Security:** browser roles are simulated, not SSO. Live deployments need corporate identity, data policies, secrets handling, retention, audit transport and restore tests.
+
+For sequencing, migration and rollback, see [Snowflake acceptance](snowflake.md), [delivery](delivery.md) and [product strategy](product.md).
